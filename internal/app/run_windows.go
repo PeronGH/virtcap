@@ -17,6 +17,10 @@ import (
 	"github.com/PeronGH/virtcap/internal/vdd"
 )
 
+const (
+	parsecVDDInstallerURL = "https://builds.parsec.app/vdd/parsec-vdd-0.45.0.0.exe"
+)
+
 func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -26,6 +30,13 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 	status, instanceID, err := vdd.QueryStatus()
 	if err != nil {
 		return fmt.Errorf("query Parsec VDD status: %w", err)
+	}
+
+	if status == vdd.StatusNotInstalled {
+		return fmt.Errorf(
+			"parsec VDD is not installed. Download it here: %s",
+			parsecVDDInstallerURL,
+		)
 	}
 
 	if status != vdd.StatusOK {
