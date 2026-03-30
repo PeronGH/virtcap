@@ -7,11 +7,11 @@ import (
 
 func TestFindNewParsecDisplay(t *testing.T) {
 	before := []Snapshot{
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode, DisplayIndex: 0, Active: true},
 	}
 	after := []Snapshot{
 		before[0],
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode, DisplayIndex: 1, Active: true},
 	}
 
 	got, err := FindNewParsecDisplay(before, after, ParsecDisplayCode)
@@ -26,7 +26,7 @@ func TestFindNewParsecDisplay(t *testing.T) {
 
 func TestFindNewParsecDisplayNoMatch(t *testing.T) {
 	before := []Snapshot{
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode, DisplayIndex: 0, Active: true},
 	}
 
 	_, err := FindNewParsecDisplay(before, before, ParsecDisplayCode)
@@ -37,12 +37,12 @@ func TestFindNewParsecDisplayNoMatch(t *testing.T) {
 
 func TestFindNewParsecDisplayAmbiguous(t *testing.T) {
 	before := []Snapshot{
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode, DisplayIndex: 0, Active: true},
 	}
 	after := []Snapshot{
 		before[0],
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode},
-		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID102#{monitor-guid}`, DeviceName: `\\.\DISPLAY3`, DisplayCode: ParsecDisplayCode},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode, DisplayIndex: 1, Active: true},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID102#{monitor-guid}`, DeviceName: `\\.\DISPLAY3`, DisplayCode: ParsecDisplayCode, DisplayIndex: 2, Active: true},
 	}
 
 	_, err := FindNewParsecDisplay(before, after, ParsecDisplayCode)
@@ -56,5 +56,32 @@ func TestParseDisplayCode(t *testing.T) {
 
 	if got := ParseDisplayCode(deviceID); got != ParsecDisplayCode {
 		t.Fatalf("ParseDisplayCode() = %q, want %q", got, ParsecDisplayCode)
+	}
+}
+
+func TestFindDisplayByIndex(t *testing.T) {
+	displays := []Snapshot{
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID100#{monitor-guid}`, DeviceName: `\\.\DISPLAY1`, DisplayCode: ParsecDisplayCode, DisplayIndex: 0, Active: true},
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode, DisplayIndex: 1, Active: true},
+	}
+
+	got, err := FindDisplayByIndex(displays, ParsecDisplayCode, 1)
+	if err != nil {
+		t.Fatalf("FindDisplayByIndex() error = %v", err)
+	}
+
+	if got.DeviceName != `\\.\DISPLAY2` {
+		t.Fatalf("FindDisplayByIndex() device = %q, want %q", got.DeviceName, `\\.\DISPLAY2`)
+	}
+}
+
+func TestFindDisplayByIndexRequiresActiveDisplay(t *testing.T) {
+	displays := []Snapshot{
+		{InterfaceName: `\\?\DISPLAY#PSCCDD0#UID101#{monitor-guid}`, DeviceName: `\\.\DISPLAY2`, DisplayCode: ParsecDisplayCode, DisplayIndex: 1, Active: false},
+	}
+
+	_, err := FindDisplayByIndex(displays, ParsecDisplayCode, 1)
+	if !errors.Is(err, ErrNoNewParsecDisplay) {
+		t.Fatalf("FindDisplayByIndex() error = %v, want %v", err, ErrNoNewParsecDisplay)
 	}
 }

@@ -38,11 +38,6 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 	}
 	defer device.Close()
 
-	before, err := display.EnumerateParsecDisplays()
-	if err != nil {
-		return fmt.Errorf("enumerate Parsec displays before add: %w", err)
-	}
-
 	addedIndex, err := device.AddDisplay()
 	if err != nil {
 		return fmt.Errorf("add Parsec display: %w", err)
@@ -65,7 +60,7 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 		<-keepaliveDone
 	}()
 
-	newDisplay, err := waitForNewDisplay(ctx, cfg.MatchTimeout, before)
+	newDisplay, err := waitForDisplayIndex(ctx, cfg.MatchTimeout, addedIndex)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
@@ -125,7 +120,7 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 	return nil
 }
 
-func waitForNewDisplay(ctx context.Context, timeout time.Duration, before []display.Snapshot) (display.Snapshot, error) {
+func waitForDisplayIndex(ctx context.Context, timeout time.Duration, displayIndex int) (display.Snapshot, error) {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 
@@ -135,11 +130,11 @@ func waitForNewDisplay(ctx context.Context, timeout time.Duration, before []disp
 	var lastErr error
 
 	for {
-		after, err := display.EnumerateParsecDisplays()
+		displays, err := display.EnumerateParsecDisplays()
 		if err != nil {
 			lastErr = err
 		} else {
-			snapshot, matchErr := display.FindNewParsecDisplay(before, after, display.ParsecDisplayCode)
+			snapshot, matchErr := display.FindDisplayByIndex(displays, display.ParsecDisplayCode, displayIndex)
 			if matchErr == nil {
 				return snapshot, nil
 			}
@@ -155,7 +150,7 @@ func waitForNewDisplay(ctx context.Context, timeout time.Duration, before []disp
 				lastErr = errors.New("no new Parsec display observed")
 			}
 
-			return display.Snapshot{}, fmt.Errorf("wait for new Parsec display: %w", lastErr)
+			return display.Snapshot{}, fmt.Errorf("wait for Parsec display index %d: %w", displayIndex, lastErr)
 		case <-ticker.C:
 		}
 	}

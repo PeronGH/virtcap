@@ -5,14 +5,17 @@ package display
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 const (
 	displayDeviceActive       = 0x00000001
+	displayDeviceAttached     = 0x00000002
 	eddGetDeviceInterfaceName = 0x00000001
 )
 
@@ -28,6 +31,11 @@ type displayDevice struct {
 }
 
 func EnumerateParsecDisplays() ([]Snapshot, error) {
+	paths, err := getDisplayPaths()
+	if err != nil {
+		return nil, err
+	}
+
 	seen := make(map[string]struct{})
 	displays := make([]Snapshot, 0)
 
@@ -58,7 +66,7 @@ func EnumerateParsecDisplays() ([]Snapshot, error) {
 				return nil, fmt.Errorf("enumerate monitors for %s at index %d: %w", adapterName, monitorIndex, err)
 			}
 
-			if monitor.StateFlags&displayDeviceActive == 0 {
+			if monitor.StateFlags&displayDeviceAttached == 0 {
 				continue
 			}
 
@@ -68,7 +76,12 @@ func EnumerateParsecDisplays() ([]Snapshot, error) {
 				continue
 			}
 
-			key := strings.ToUpper(interfaceName)
+			path, found := matchDisplayPath(paths, interfaceName)
+			if !found {
+				continue
+			}
+
+			key := strings.ToUpper(path)
 			if _, exists := seen[key]; exists {
 				continue
 			}
@@ -78,6 +91,8 @@ func EnumerateParsecDisplays() ([]Snapshot, error) {
 				InterfaceName: interfaceName,
 				DeviceName:    adapterName,
 				DisplayCode:   displayCode,
+				DisplayIndex:  parseDisplayIndex(path),
+				Active:        monitor.StateFlags&displayDeviceActive != 0,
 			})
 		}
 	}
@@ -105,4 +120,62 @@ func enumDisplayDevices(device *uint16, index uint32, out *displayDevice, flags 
 
 func errorsIsSuccess(err error) bool {
 	return err == nil || errors.Is(err, windows.ERROR_SUCCESS)
+}
+
+func getDisplayPaths() ([]string, error) {
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\monitor\Enum`, registry.QUERY_VALUE)
+	if err != nil {
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("open monitor enum registry key: %w", err)
+	}
+	defer key.Close()
+
+	count, _, err := key.GetIntegerValue("Count")
+	if err != nil {
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("read monitor enum count: %w", err)
+	}
+
+	paths := make([]string, 0, int(count))
+	for i := uint64(0); i < count; i++ {
+		value, _, err := key.GetStringValue(strconv.FormatUint(i, 10))
+		if err != nil {
+			return nil, fmt.Errorf("read monitor enum path %d: %w", i, err)
+		}
+
+		paths = append(paths, value)
+	}
+
+	return paths, nil
+}
+
+func matchDisplayPath(paths []string, interfaceName string) (string, bool) {
+	for _, path := range paths {
+		if strings.Contains(interfaceName, strings.ReplaceAll(path, `\`, `#`)) {
+			return path, true
+		}
+	}
+
+	return "", false
+}
+
+func parseDisplayIndex(path string) int {
+	upper := strings.ToUpper(path)
+	index := strings.LastIndex(upper, "UID")
+	if index < 0 {
+		return -1
+	}
+
+	address, err := strconv.Atoi(path[index+3:])
+	if err != nil {
+		return -1
+	}
+
+	return address - 0x100
 }

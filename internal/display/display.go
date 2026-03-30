@@ -16,6 +16,8 @@ type Snapshot struct {
 	InterfaceName string
 	DeviceName    string
 	DisplayCode   string
+	DisplayIndex  int
+	Active        bool
 }
 
 func FindNewParsecDisplay(before []Snapshot, after []Snapshot, displayCode string) (Snapshot, error) {
@@ -54,4 +56,24 @@ func ParseDisplayCode(deviceID string) string {
 	}
 
 	return deviceID
+}
+
+func FindDisplayByIndex(displays []Snapshot, displayCode string, displayIndex int) (Snapshot, error) {
+	for _, snapshot := range displays {
+		if !strings.EqualFold(snapshot.DisplayCode, displayCode) {
+			continue
+		}
+
+		if snapshot.DisplayIndex != displayIndex {
+			continue
+		}
+
+		if !snapshot.Active {
+			return Snapshot{}, ErrNoNewParsecDisplay
+		}
+
+		return snapshot, nil
+	}
+
+	return Snapshot{}, ErrNoNewParsecDisplay
 }
