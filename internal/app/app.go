@@ -7,12 +7,15 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/PeronGH/virtcap/internal/ffmpeg"
 )
 
 type Config struct {
 	FFmpegPath   string
 	MatchTimeout time.Duration
 	ProbeGrace   time.Duration
+	StdoutFormat ffmpeg.OutputFormat
 	Verbose      bool
 }
 
@@ -34,6 +37,7 @@ func parseFlags(args []string, stderr io.Writer) (Config, error) {
 		FFmpegPath:   "ffmpeg",
 		MatchTimeout: 10 * time.Second,
 		ProbeGrace:   2 * time.Second,
+		StdoutFormat: ffmpeg.OutputFormatMPEGTS,
 	}
 
 	fs := flag.NewFlagSet("virtcap", flag.ContinueOnError)
@@ -41,6 +45,15 @@ func parseFlags(args []string, stderr io.Writer) (Config, error) {
 	fs.StringVar(&cfg.FFmpegPath, "ffmpeg", cfg.FFmpegPath, "Path to the ffmpeg executable.")
 	fs.DurationVar(&cfg.MatchTimeout, "match-timeout", cfg.MatchTimeout, "How long to wait for the new Parsec display to appear.")
 	fs.DurationVar(&cfg.ProbeGrace, "probe-grace", cfg.ProbeGrace, "How long each ffmpeg encoder probe runs before it is accepted.")
+	fs.Func("stdout-format", "Stdout format: mpegts or hevc.", func(value string) error {
+		format, err := ffmpeg.ParseOutputFormat(value)
+		if err != nil {
+			return err
+		}
+
+		cfg.StdoutFormat = format
+		return nil
+	})
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "Write progress logs to stderr.")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n\n", fs.Name())

@@ -12,6 +12,13 @@ import (
 	"github.com/PeronGH/virtcap/internal/dxgi"
 )
 
+type OutputFormat string
+
+const (
+	OutputFormatMPEGTS OutputFormat = "mpegts"
+	OutputFormatHEVC   OutputFormat = "hevc"
+)
+
 var fallbackEncoders = []string{
 	"hevc_mf",
 	"libx265",
@@ -34,6 +41,17 @@ type Runner interface {
 }
 
 type ExecRunner struct{}
+
+func ParseOutputFormat(value string) (OutputFormat, error) {
+	switch OutputFormat(strings.ToLower(strings.TrimSpace(value))) {
+	case OutputFormatMPEGTS:
+		return OutputFormatMPEGTS, nil
+	case OutputFormatHEVC:
+		return OutputFormatHEVC, nil
+	default:
+		return "", fmt.Errorf("unsupported stdout format %q: want mpegts or hevc", value)
+	}
+}
 
 func SelectEncoder(
 	ctx context.Context,
@@ -142,10 +160,11 @@ func StartCapture(
 	adapterIndex int,
 	outputIndex int,
 	encoder string,
+	outputFormat OutputFormat,
 	stdout io.Writer,
 	stderr io.Writer,
 ) (*exec.Cmd, error) {
-	cmd := exec.CommandContext(ctx, ffmpegPath, BuildCaptureArgs(adapterIndex, outputIndex, encoder)...)
+	cmd := exec.CommandContext(ctx, ffmpegPath, BuildCaptureArgs(adapterIndex, outputIndex, encoder, outputFormat)...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
@@ -166,26 +185,30 @@ func BuildProbeArgs(adapterIndex int, outputIndex int, encoder string, probeGrac
 	return args
 }
 
-func BuildCaptureArgs(adapterIndex int, outputIndex int, encoder string) []string {
+func BuildCaptureArgs(adapterIndex int, outputIndex int, encoder string, outputFormat OutputFormat) []string {
 	args := buildBaseArgs(adapterIndex, outputIndex, encoder)
-	args = append(args,
-		"-f", "hevc", "pipe:1",
-	)
+	args = append(args, buildMuxArgs(outputFormat)...)
 
 	return args
 }
 
 func buildBaseArgs(adapterIndex int, outputIndex int, encoder string) []string {
-	return []string{
+	args := []string{
 		"-hide_banner",
 		"-loglevel", "warning",
 		"-nostdin",
 		"-init_hw_device", fmt.Sprintf("d3d11va=cap:%d", adapterIndex),
 		"-filter_hw_device", "cap",
 		"-filter_complex", buildFilterGraph(outputIndex, encoder),
+		"-flags", "+low_delay",
+		"-g", "30",
+		"-bf", "0",
 		"-an",
 		"-c:v", encoder,
 	}
+
+	args = append(args, encoderArgs(encoder)...)
+	return args
 }
 
 func buildFilterGraph(outputIndex int, encoder string) string {
@@ -199,4 +222,54 @@ func buildFilterGraph(outputIndex int, encoder string) string {
 
 func formatSeconds(duration time.Duration) string {
 	return strconv.FormatFloat(duration.Seconds(), 'f', 3, 64)
+}
+
+func encoderArgs(encoder string) []string {
+	switch encoder {
+	case "hevc_nvenc":
+		return []string{
+			"-preset", "llhq",
+			"-tune", "ull",
+		}
+	case "hevc_amf":
+		return []string{
+			"-usage", "ultralowlatency",
+		}
+	case "hevc_qsv":
+		return []string{
+			"-low_delay_brc", "1",
+		}
+	case "hevc_mf":
+		return []string{
+			"-scenario", "live_streaming",
+		}
+	case "libx265":
+		return []string{
+			"-tune", "zerolatency",
+			"-x265-params", "repeat-headers=1:keyint=30:min-keyint=30",
+		}
+	default:
+		return nil
+	}
+}
+
+func buildMuxArgs(outputFormat OutputFormat) []string {
+	switch outputFormat {
+	case OutputFormatHEVC:
+		return []string{
+			"-f", "hevc", "pipe:1",
+		}
+	case OutputFormatMPEGTS:
+		return []string{
+			"-flush_packets", "1",
+			"-muxdelay", "0",
+			"-muxpreload", "0",
+			"-mpegts_flags", "pat_pmt_at_frames",
+			"-f", "mpegts", "pipe:1",
+		}
+	default:
+		return []string{
+			"-f", string(outputFormat), "pipe:1",
+		}
+	}
 }
