@@ -115,7 +115,7 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 
 	log.Printf("selected encoder %s", encoder)
 
-	cmd, err := ffmpeg.StartCapture(ctx, cfg.FFmpegPath, output.AdapterIndex, output.OutputIndex, encoder, cfg.StdoutFormat, stdout, stderr)
+	cmd, err := ffmpeg.StartCapture(ctx, cfg.FFmpegPath, output.AdapterIndex, output.OutputIndex, encoder, stdout, stderr)
 	if err != nil {
 		return fmt.Errorf("start ffmpeg capture: %w", err)
 	}

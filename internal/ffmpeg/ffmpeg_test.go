@@ -97,7 +97,7 @@ func TestBuildProbeArgsUsesHardwareDeviceAndNullSink(t *testing.T) {
 }
 
 func TestBuildCaptureArgsSoftwareFallbackDownloadsFrames(t *testing.T) {
-	args := BuildCaptureArgs(0, 2, "libx265", OutputFormatMPEGTS)
+	args := BuildCaptureArgs(0, 2, "libx265")
 	got := strings.Join(args, " ")
 
 	for _, token := range []string{
@@ -109,11 +109,7 @@ func TestBuildCaptureArgsSoftwareFallbackDownloadsFrames(t *testing.T) {
 		"-x265-params repeat-headers=1:keyint=30:min-keyint=30",
 		"-c:v libx265",
 		"-fps_mode passthrough",
-		"-flush_packets 1",
-		"-muxdelay 0",
-		"-muxpreload 0",
-		"-mpegts_flags pat_pmt_at_frames",
-		"-f mpegts pipe:1",
+		"-f hevc pipe:1",
 	} {
 		if !strings.Contains(got, token) {
 			t.Fatalf("BuildCaptureArgs() = %q, want token %q", got, token)
@@ -122,7 +118,7 @@ func TestBuildCaptureArgsSoftwareFallbackDownloadsFrames(t *testing.T) {
 }
 
 func TestBuildCaptureArgsRawHEVCKeepsElementaryStream(t *testing.T) {
-	args := BuildCaptureArgs(1, 0, "hevc_nvenc", OutputFormatHEVC)
+	args := BuildCaptureArgs(1, 0, "hevc_nvenc")
 	got := strings.Join(args, " ")
 
 	for _, token := range []string{
@@ -133,37 +129,6 @@ func TestBuildCaptureArgsRawHEVCKeepsElementaryStream(t *testing.T) {
 	} {
 		if !strings.Contains(got, token) {
 			t.Fatalf("BuildCaptureArgs() = %q, want token %q", got, token)
-		}
-	}
-}
-
-func TestParseOutputFormat(t *testing.T) {
-	tests := []struct {
-		value   string
-		want    OutputFormat
-		wantErr bool
-	}{
-		{value: "mpegts", want: OutputFormatMPEGTS},
-		{value: "HEVC", want: OutputFormatHEVC},
-		{value: "bad", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		got, err := ParseOutputFormat(tt.value)
-		if tt.wantErr {
-			if err == nil {
-				t.Fatalf("ParseOutputFormat(%q) error = nil, want error", tt.value)
-			}
-
-			continue
-		}
-
-		if err != nil {
-			t.Fatalf("ParseOutputFormat(%q) error = %v", tt.value, err)
-		}
-
-		if got != tt.want {
-			t.Fatalf("ParseOutputFormat(%q) = %q, want %q", tt.value, got, tt.want)
 		}
 	}
 }

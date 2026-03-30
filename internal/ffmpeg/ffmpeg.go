@@ -12,13 +12,6 @@ import (
 	"github.com/PeronGH/virtcap/internal/dxgi"
 )
 
-type OutputFormat string
-
-const (
-	OutputFormatMPEGTS OutputFormat = "mpegts"
-	OutputFormatHEVC   OutputFormat = "hevc"
-)
-
 var fallbackEncoders = []string{
 	"hevc_mf",
 	"libx265",
@@ -41,17 +34,6 @@ type Runner interface {
 }
 
 type ExecRunner struct{}
-
-func ParseOutputFormat(value string) (OutputFormat, error) {
-	switch OutputFormat(strings.ToLower(strings.TrimSpace(value))) {
-	case OutputFormatMPEGTS:
-		return OutputFormatMPEGTS, nil
-	case OutputFormatHEVC:
-		return OutputFormatHEVC, nil
-	default:
-		return "", fmt.Errorf("unsupported stdout format %q: want mpegts or hevc", value)
-	}
-}
 
 func SelectEncoder(
 	ctx context.Context,
@@ -160,11 +142,10 @@ func StartCapture(
 	adapterIndex int,
 	outputIndex int,
 	encoder string,
-	outputFormat OutputFormat,
 	stdout io.Writer,
 	stderr io.Writer,
 ) (*exec.Cmd, error) {
-	cmd := exec.CommandContext(ctx, ffmpegPath, BuildCaptureArgs(adapterIndex, outputIndex, encoder, outputFormat)...)
+	cmd := exec.CommandContext(ctx, ffmpegPath, BuildCaptureArgs(adapterIndex, outputIndex, encoder)...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
@@ -185,10 +166,10 @@ func BuildProbeArgs(adapterIndex int, outputIndex int, encoder string, probeGrac
 	return args
 }
 
-func BuildCaptureArgs(adapterIndex int, outputIndex int, encoder string, outputFormat OutputFormat) []string {
+func BuildCaptureArgs(adapterIndex int, outputIndex int, encoder string) []string {
 	args := buildBaseArgs(adapterIndex, outputIndex, encoder)
 	args = append(args, "-fps_mode", "passthrough")
-	args = append(args, buildMuxArgs(outputFormat)...)
+	args = append(args, "-f", "hevc", "pipe:1")
 
 	return args
 }
@@ -251,26 +232,5 @@ func encoderArgs(encoder string) []string {
 		}
 	default:
 		return nil
-	}
-}
-
-func buildMuxArgs(outputFormat OutputFormat) []string {
-	switch outputFormat {
-	case OutputFormatHEVC:
-		return []string{
-			"-f", "hevc", "pipe:1",
-		}
-	case OutputFormatMPEGTS:
-		return []string{
-			"-flush_packets", "1",
-			"-muxdelay", "0",
-			"-muxpreload", "0",
-			"-mpegts_flags", "pat_pmt_at_frames",
-			"-f", "mpegts", "pipe:1",
-		}
-	default:
-		return []string{
-			"-f", string(outputFormat), "pipe:1",
-		}
 	}
 }
