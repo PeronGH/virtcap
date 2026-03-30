@@ -187,6 +187,7 @@ func BuildProbeArgs(adapterIndex int, outputIndex int, encoder string, probeGrac
 
 func BuildCaptureArgs(adapterIndex int, outputIndex int, encoder string, outputFormat OutputFormat) []string {
 	args := buildBaseArgs(adapterIndex, outputIndex, encoder)
+	args = append(args, "-fps_mode", "passthrough")
 	args = append(args, buildMuxArgs(outputFormat)...)
 
 	return args
@@ -212,7 +213,7 @@ func buildBaseArgs(adapterIndex int, outputIndex int, encoder string) []string {
 }
 
 func buildFilterGraph(outputIndex int, encoder string) string {
-	graph := fmt.Sprintf("ddagrab=output_idx=%d", outputIndex)
+	graph := fmt.Sprintf("ddagrab=output_idx=%d:dup_frames=0", outputIndex)
 	if encoder == "libx265" {
 		return graph + ",hwdownload,format=bgra,format=yuv420p"
 	}

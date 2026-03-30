@@ -22,6 +22,7 @@ Behavior:
 - Matches that display to the DXGI adapter/output pair that Windows assigned to it.
 - Probes the matched GPU's preferred hardware encoder first when possible, then falls back through the remaining hardware vendors, `hevc_mf`, and finally `libx265`.
 - Uses low-latency encoder settings and writes MPEG-TS to stdout by default.
+- Avoids duplicating unchanged desktop frames and preserves varying frame timing to reduce bandwidth when the screen is mostly static.
 - Keeps `--stdout-format hevc` available for raw HEVC output when needed.
 
 All diagnostics go to stderr so stdout stays clean for the HEVC stream.

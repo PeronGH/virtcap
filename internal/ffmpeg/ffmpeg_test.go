@@ -85,7 +85,7 @@ func TestBuildProbeArgsUsesHardwareDeviceAndNullSink(t *testing.T) {
 	for _, token := range []string{
 		"-init_hw_device d3d11va=cap:3",
 		"-filter_hw_device cap",
-		"-filter_complex ddagrab=output_idx=1",
+		"-filter_complex ddagrab=output_idx=1:dup_frames=0",
 		"-c:v hevc_nvenc",
 		"-t 1.500",
 		"-f null -",
@@ -101,13 +101,14 @@ func TestBuildCaptureArgsSoftwareFallbackDownloadsFrames(t *testing.T) {
 	got := strings.Join(args, " ")
 
 	for _, token := range []string{
-		"-filter_complex ddagrab=output_idx=2,hwdownload,format=bgra,format=yuv420p",
+		"-filter_complex ddagrab=output_idx=2:dup_frames=0,hwdownload,format=bgra,format=yuv420p",
 		"-flags +low_delay",
 		"-g 30",
 		"-bf 0",
 		"-tune zerolatency",
 		"-x265-params repeat-headers=1:keyint=30:min-keyint=30",
 		"-c:v libx265",
+		"-fps_mode passthrough",
 		"-flush_packets 1",
 		"-muxdelay 0",
 		"-muxpreload 0",
@@ -127,6 +128,7 @@ func TestBuildCaptureArgsRawHEVCKeepsElementaryStream(t *testing.T) {
 	for _, token := range []string{
 		"-preset llhq",
 		"-tune ull",
+		"-fps_mode passthrough",
 		"-f hevc pipe:1",
 	} {
 		if !strings.Contains(got, token) {
