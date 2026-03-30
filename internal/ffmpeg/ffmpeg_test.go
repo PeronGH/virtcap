@@ -7,27 +7,29 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/PeronGH/virtcap/internal/dxgi"
 )
 
 func TestSelectEncoderUsesFirstSuccessfulCandidate(t *testing.T) {
 	runner := &fakeRunner{
 		failures: map[string]error{
-			"hevc_amf": errors.New("amf failed"),
-			"hevc_qsv": nil,
+			"hevc_nvenc": errors.New("nvenc failed"),
+			"hevc_amf":   nil,
 		},
 	}
 
-	got, err := SelectEncoder(context.Background(), "ffmpeg", 1, 2, time.Second, runner, io.Discard, false)
+	got, err := SelectEncoder(context.Background(), "ffmpeg", 1, 2, dxgi.VendorNVIDIA, time.Second, runner, io.Discard, false)
 	if err != nil {
 		t.Fatalf("SelectEncoder() error = %v", err)
 	}
 
-	if got != "hevc_qsv" {
-		t.Fatalf("SelectEncoder() = %q, want hevc_qsv", got)
+	if got != "hevc_amf" {
+		t.Fatalf("SelectEncoder() = %q, want hevc_amf", got)
 	}
 
-	if strings.Join(runner.seen, ",") != "hevc_amf,hevc_qsv" {
-		t.Fatalf("probe order = %v, want [hevc_amf hevc_qsv]", runner.seen)
+	if strings.Join(runner.seen, ",") != "hevc_nvenc,hevc_amf" {
+		t.Fatalf("probe order = %v, want [hevc_nvenc hevc_amf]", runner.seen)
 	}
 }
 
@@ -42,7 +44,7 @@ func TestSelectEncoderReturnsJoinedFailure(t *testing.T) {
 		},
 	}
 
-	_, err := SelectEncoder(context.Background(), "ffmpeg", 0, 0, time.Second, runner, io.Discard, false)
+	_, err := SelectEncoder(context.Background(), "ffmpeg", 0, 0, dxgi.VendorUnknown, time.Second, runner, io.Discard, false)
 	if err == nil {
 		t.Fatalf("SelectEncoder() error = nil, want failure")
 	}
@@ -51,6 +53,28 @@ func TestSelectEncoderReturnsJoinedFailure(t *testing.T) {
 		if !strings.Contains(err.Error(), token) {
 			t.Fatalf("SelectEncoder() error = %q, want token %q", err.Error(), token)
 		}
+	}
+}
+
+func TestEncoderCandidatesForVendor(t *testing.T) {
+	tests := []struct {
+		name   string
+		vendor dxgi.Vendor
+		want   string
+	}{
+		{name: "nvidia", vendor: dxgi.VendorNVIDIA, want: "hevc_nvenc,hevc_amf,hevc_qsv,hevc_mf,libx265"},
+		{name: "amd", vendor: dxgi.VendorAMD, want: "hevc_amf,hevc_nvenc,hevc_qsv,hevc_mf,libx265"},
+		{name: "intel", vendor: dxgi.VendorIntel, want: "hevc_qsv,hevc_nvenc,hevc_amf,hevc_mf,libx265"},
+		{name: "unknown", vendor: dxgi.VendorUnknown, want: "hevc_nvenc,hevc_amf,hevc_qsv,hevc_mf,libx265"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := strings.Join(EncoderCandidatesForVendor(tt.vendor), ",")
+			if got != tt.want {
+				t.Fatalf("EncoderCandidatesForVendor() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

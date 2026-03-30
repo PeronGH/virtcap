@@ -97,6 +97,21 @@ type dxgiOutputVtbl struct {
 	GetFrameStatistics          uintptr
 }
 
+type dxgiAdapterDesc1 struct {
+	Description           [128]uint16
+	VendorID              uint32
+	DeviceID              uint32
+	SubSysID              uint32
+	Revision              uint32
+	DedicatedVideoMemory  uintptr
+	DedicatedSystemMemory uintptr
+	SharedSystemMemory    uintptr
+	AdapterLUID           windows.LUID
+	Flags                 uint32
+}
+
+const dxgiAdapterFlagSoftware = 0x2
+
 func EnumerateOutputs() ([]Output, error) {
 	factory, err := createFactory1()
 	if err != nil {
@@ -113,6 +128,16 @@ func EnumerateOutputs() ([]Output, error) {
 			}
 
 			return nil, fmt.Errorf("enumerate DXGI adapter %d: %w", adapterIndex, err)
+		}
+
+		adapterDesc, err := adapter.GetDesc1()
+		if err != nil {
+			adapter.Release()
+			return nil, fmt.Errorf("get DXGI adapter %d desc: %w", adapterIndex, err)
+		}
+		if adapterDesc.Flags&dxgiAdapterFlagSoftware != 0 {
+			adapter.Release()
+			continue
 		}
 
 		for outputIndex := 0; ; outputIndex++ {
@@ -141,6 +166,7 @@ func EnumerateOutputs() ([]Output, error) {
 				AdapterIndex: adapterIndex,
 				OutputIndex:  outputIndex,
 				DeviceName:   windows.UTF16ToString(desc.DeviceName[:]),
+				Vendor:       vendorFromID(adapterDesc.VendorID),
 			})
 		}
 
@@ -209,6 +235,20 @@ func (a *dxgiAdapter1) Release() {
 	syscall.SyscallN(a.lpVtbl.Release, uintptr(unsafe.Pointer(a)))
 }
 
+func (a *dxgiAdapter1) GetDesc1() (dxgiAdapterDesc1, error) {
+	var desc dxgiAdapterDesc1
+	hr, _, _ := syscall.SyscallN(
+		a.lpVtbl.GetDesc1,
+		uintptr(unsafe.Pointer(a)),
+		uintptr(unsafe.Pointer(&desc)),
+	)
+	if int32(hr) < 0 {
+		return dxgiAdapterDesc1{}, syscall.Errno(hr)
+	}
+
+	return desc, nil
+}
+
 func (o *dxgiOutput) GetDesc() (dxgiOutputDesc, error) {
 	var desc dxgiOutputDesc
 	hr, _, _ := syscall.SyscallN(
@@ -229,4 +269,17 @@ func (o *dxgiOutput) Release() {
 	}
 
 	syscall.SyscallN(o.lpVtbl.Release, uintptr(unsafe.Pointer(o)))
+}
+
+func vendorFromID(vendorID uint32) Vendor {
+	switch vendorID {
+	case 0x10DE:
+		return VendorNVIDIA
+	case 0x1002, 0x1022:
+		return VendorAMD
+	case 0x8086:
+		return VendorIntel
+	default:
+		return VendorUnknown
+	}
 }

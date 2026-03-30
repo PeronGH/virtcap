@@ -8,14 +8,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/PeronGH/virtcap/internal/dxgi"
 )
 
-var EncoderCandidates = []string{
-	"hevc_amf",
-	"hevc_qsv",
-	"hevc_nvenc",
+var fallbackEncoders = []string{
 	"hevc_mf",
 	"libx265",
+}
+
+var vendorPrimaryEncoders = map[dxgi.Vendor]string{
+	dxgi.VendorNVIDIA: "hevc_nvenc",
+	dxgi.VendorAMD:    "hevc_amf",
+	dxgi.VendorIntel:  "hevc_qsv",
+}
+
+var vendorPreference = []dxgi.Vendor{
+	dxgi.VendorNVIDIA,
+	dxgi.VendorAMD,
+	dxgi.VendorIntel,
 }
 
 type Runner interface {
@@ -29,14 +40,16 @@ func SelectEncoder(
 	ffmpegPath string,
 	adapterIndex int,
 	outputIndex int,
+	vendor dxgi.Vendor,
 	probeGrace time.Duration,
 	runner Runner,
 	stderr io.Writer,
 	verbose bool,
 ) (string, error) {
-	failures := make([]string, 0, len(EncoderCandidates))
+	candidates := EncoderCandidatesForVendor(vendor)
+	failures := make([]string, 0, len(candidates))
 
-	for _, encoder := range EncoderCandidates {
+	for _, encoder := range candidates {
 		if verbose {
 			fmt.Fprintf(stderr, "probing encoder %s\n", encoder)
 		}
@@ -59,6 +72,36 @@ func SelectEncoder(
 	}
 
 	return "", fmt.Errorf("no encoder probe succeeded: %s", strings.Join(failures, "; "))
+}
+
+func EncoderCandidatesForVendor(vendor dxgi.Vendor) []string {
+	ordered := make([]string, 0, len(vendorPrimaryEncoders)+len(fallbackEncoders))
+	seen := make(map[string]struct{}, len(vendorPrimaryEncoders)+len(fallbackEncoders))
+
+	if primary, ok := vendorPrimaryEncoders[vendor]; ok {
+		ordered = append(ordered, primary)
+		seen[primary] = struct{}{}
+	}
+
+	for _, candidateVendor := range vendorPreference {
+		encoder := vendorPrimaryEncoders[candidateVendor]
+		if _, ok := seen[encoder]; ok {
+			continue
+		}
+
+		ordered = append(ordered, encoder)
+		seen[encoder] = struct{}{}
+	}
+
+	for _, encoder := range fallbackEncoders {
+		if _, ok := seen[encoder]; ok {
+			continue
+		}
+
+		ordered = append(ordered, encoder)
+	}
+
+	return ordered
 }
 
 func (ExecRunner) Probe(

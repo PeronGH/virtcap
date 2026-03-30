@@ -19,8 +19,8 @@ Behavior:
 - Adds one virtual display.
 - Sends `VDD_IOCTL_UPDATE` every 100 ms until shutdown.
 - Waits for exactly one new Parsec display to appear.
-- Matches that display to a DXGI adapter/output pair.
-- Probes `hevc_amf`, `hevc_qsv`, `hevc_nvenc`, `hevc_mf`, then `libx265`.
+- Matches that display to the DXGI adapter/output pair that Windows assigned to it.
+- Probes the matched GPU's preferred hardware encoder first when possible, then falls back through the remaining hardware vendors, `hevc_mf`, and finally `libx265`.
 - Starts `ffmpeg` and pipes raw HEVC to stdout.
 
 All diagnostics go to stderr so stdout stays clean for the HEVC stream.

@@ -86,13 +86,14 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 		return fmt.Errorf("match DXGI output for %s: %w", newDisplay.DeviceName, err)
 	}
 
-	log.Printf("resolved DXGI adapter %d output %d", output.AdapterIndex, output.OutputIndex)
+	log.Printf("resolved DXGI adapter %d output %d (%s)", output.AdapterIndex, output.OutputIndex, output.Vendor)
 
 	encoder, err := ffmpeg.SelectEncoder(
 		ctx,
 		cfg.FFmpegPath,
 		output.AdapterIndex,
 		output.OutputIndex,
+		output.Vendor,
 		cfg.ProbeGrace,
 		ffmpeg.ExecRunner{},
 		stderr,
