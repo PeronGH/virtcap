@@ -82,6 +82,14 @@ func run(cfg Config, stdout io.Writer, stderr io.Writer) error {
 
 	log.Printf("matched Parsec display %s to device %s", newDisplay.InterfaceName, newDisplay.DeviceName)
 
+	if cfg.Preset.Name != "" {
+		if err := display.ApplyMode(newDisplay.DeviceName, cfg.Preset.Width, cfg.Preset.Height, cfg.Preset.Hz); err != nil {
+			return fmt.Errorf("apply preset %s: %w", cfg.Preset.Name, err)
+		}
+
+		log.Printf("applied preset %s as %dx%d@%d", cfg.Preset.Name, cfg.Preset.Width, cfg.Preset.Height, cfg.Preset.Hz)
+	}
+
 	outputs, err := dxgi.EnumerateOutputs()
 	if err != nil {
 		return fmt.Errorf("enumerate DXGI outputs: %w", err)

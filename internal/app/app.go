@@ -7,12 +7,15 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/PeronGH/virtcap/internal/preset"
 )
 
 type Config struct {
 	FFmpegPath   string
 	MatchTimeout time.Duration
 	ProbeGrace   time.Duration
+	Preset       preset.Definition
 	Verbose      bool
 }
 
@@ -41,6 +44,15 @@ func parseFlags(args []string, stderr io.Writer) (Config, error) {
 	fs.StringVar(&cfg.FFmpegPath, "ffmpeg", cfg.FFmpegPath, "Path to the ffmpeg executable.")
 	fs.DurationVar(&cfg.MatchTimeout, "match-timeout", cfg.MatchTimeout, "How long to wait for the new Parsec display to appear.")
 	fs.DurationVar(&cfg.ProbeGrace, "probe-grace", cfg.ProbeGrace, "How long each ffmpeg encoder probe runs before it is accepted.")
+	fs.Func("preset", "Display preset: 1080p, 1200p, 1440p, 4k, 3k, 2.8k, 1600p, uwqhd, uw1600p, dual-1080p, 3:2-medium, 3:2-large, surface-pro.", func(value string) error {
+		definition, err := preset.Parse(value)
+		if err != nil {
+			return err
+		}
+
+		cfg.Preset = definition
+		return nil
+	})
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "Write progress logs to stderr.")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n\n", fs.Name())
